@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="记账本">
+<title>记账本</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --bg:#FAF8F5;--card:#fff;--border:#F0EDE8;
+    --text:#2D2A26;--sub:#9E9890;
+    --accent:#F4845F;--accent-bg:#FFF1EC;
+    --green:#3CB879;--green-bg:#EDF7F1;
+    --red:#F25C5C;--red-bg:#FEF0F0;
+    --purple:#7C83FD;--purple-bg:#F0F1FF;
+    --shadow:0 2px 12px rgba(45,42,38,0.07);
+    --r:18px;
+  }
+  html,body{height:100%;background:var(--bg);font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;color:var(--text);overscroll-behavior:none}
+  #app{max-width:430px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative}
+  .page{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:80px}
+  /* Nav */
+  .nav{display:flex;background:var(--card);border-top:1px solid var(--border);position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;z-index:40;padding-bottom:env(safe-area-inset-bottom,0)}
+  .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0 8px;border:none;background:none;cursor:pointer;font-size:10px;font-weight:700;color:var(--sub);transition:color .2s}
+  .nav-btn.active{color:var(--accent)}
+  .nav-btn span.ico{font-size:22px;filter:grayscale(1) opacity(.4);transition:filter .2s}
+  .nav-btn.active span.ico{filter:none}
+  .nav-dot{width:16px;height:3px;border-radius:2px;background:var(--accent);margin-top:2px;opacity:0;transition:opacity .2s}
+  .nav-btn.active .nav-dot{opacity:1}
+  /* Cards */
+  .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+  .card-pad{padding:16px 18px}
+  /* Buttons */
+  btn,button{font-family:inherit;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff;border:none;border-radius:14px;padding:14px 0;font-size:15px;font-weight:800;width:100%}
+  .btn-ghost{background:none;border:1.5px solid var(--border);border-radius:14px;padding:12px 0;font-size:14px;color:var(--sub);width:100%}
+  /* Pill tabs */
+  .pill-tabs{display:flex;background:var(--border);border-radius:14px;padding:3px;gap:0}
+  .pill-tab{flex:1;padding:7px 0;border:none;border-radius:12px;font-size:13px;font-weight:600;background:none;color:var(--sub);transition:all .2s;cursor:pointer}
+  .pill-tab.active{background:var(--card);box-shadow:var(--shadow)}
+  /* Bottom sheet */
+  .sheet-overlay{position:fixed;inset:0;background:rgba(45,42,38,.45);z-index:80;opacity:0;pointer-events:none;transition:opacity .25s}
+  .sheet-overlay.show{opacity:1;pointer-events:all}
+  .sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(100%);width:100%;max-width:430px;background:var(--bg);border-radius:24px 24px 0 0;z-index:90;transition:transform .3s cubic-bezier(.32,1,.23,1);padding:20px 18px 0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 24px);max-height:92vh;overflow-y:auto}
+  .sheet.show{transform:translateX(-50%) translateY(0)}
+  /* Category pills */
+  .cat-pill{padding:7px 12px;border-radius:20px;border:none;font-size:13px;cursor:pointer;background:var(--card);color:var(--text);font-weight:400;box-shadow:var(--shadow);transition:all .15s;white-space:nowrap}
+  .cat-pill.active{background:var(--accent);color:#fff;font-weight:700;box-shadow:none}
+  /* Calendar */
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-day{padding:8px 0;border-radius:10px;border:none;background:none;font-size:13px;cursor:pointer;text-align:center;color:var(--text)}
+  .cal-day.active{background:var(--accent);color:#fff;font-weight:800}
+  .cal-day.empty{pointer-events:none}
+  /* Form inputs */
+  .finput{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;outline:none;background:var(--card);color:var(--text);font-family:inherit}
+  .finput:focus{border-color:var(--accent)}
+  .fselect{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:13px;outline:none;background:var(--card);color:var(--text);font-family:inherit;-webkit-appearance:none}
+  /* Numpad */
+  .numpad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .numpad-btn{padding:16px 0;border-radius:14px;border:none;background:var(--card);font-size:20px;font-weight:500;cursor:pointer;color:var(--text);box-shadow:var(--shadow);transition:transform .1s;font-family:inherit}
+  .numpad-btn:active{transform:scale(.94)}
+  .numpad-btn.del{background:var(--border);font-size:16px}
+  /* Transaction row */
+  .tx-row{display:flex;align-items:center;padding:13px 16px;border-bottom:1px solid var(--bg)}
+  .tx-row:last-child{border-bottom:none}
+  .tx-icon{width:42px;height:42px;border-radius:14px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;margin-right:12px}
+  /* Summary strips */
+  .sum-card{flex:1;border-radius:16px;padding:12px 12px 10px}
+  /* Gradient asset card */
+  .asset-hero{background:linear-gradient(135deg,#F4845F 0%,#F7B731 100%);border-radius:24px;padding:28px 24px 24px;color:#fff;position:relative;overflow:hidden;margin-bottom:20px}
+  .asset-hero::before{content:'';position:absolute;top:-20px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+  .asset-hero::after{content:'';position:absolute;bottom:-30px;right:30px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.08)}
+  /* NL bar */
+  .nl-bar{display:flex;gap:8px;align-items:center}
+  .nl-input{flex:1;padding:11px 14px;border:1.5px solid var(--border);border-radius:14px;font-size:14px;outline:none;background:var(--bg);color:var(--text);font-family:inherit}
+  .nl-input:focus{border-color:var(--accent)}
+  .nl-btn{padding:11px 18px;border-radius:14px;border:none;background:var(--accent);color:#fff;font-weight:800;font-size:14px;white-space:nowrap;transition:opacity .2s}
+  .nl-btn:disabled{background:var(--border);color:var(--sub)}
+  /* Preview card */
+  .preview-card{background:var(--accent-bg);border-radius:16px;padding:14px 16px;margin-bottom:14px}
+  /* Misc */
+  .section-label{font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px}
+  .sub-text{font-size:11px;color:var(--sub)}
+  .divider{height:1px;background:var(--bg);margin:0}
+  .empty-state{text-align:center;padding:56px 0;color:var(--sub);font-size:14px}
+  .tag-default{font-size:10px;background:var(--accent-bg);color:var(--accent);padding:2px 7px;border-radius:8px;font-weight:700;margin-left:6px}
+  .edit-panel{background:var(--bg);border-top:1px solid var(--border);padding:14px 16px 16px}
+  .edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .edit-label{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:4px}
+  /* Checkbox */
+  .chk{width:22px;height:22px;border-radius:7px;border:2px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;cursor:pointer}
+  .chk.checked{background:var(--accent);border-color:var(--accent)}
+  /* Chart container */
+  .chart-wrap{position:relative;width:100%;margin:8px 0}
+  /* Settings */
+  .settings-row{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--bg)}
+  .settings-row:last-child{border-bottom:none}
+  /* Scrollbar hide */
+  ::-webkit-scrollbar{display:none}
+  /* Spinner */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:20px;height:20px;border:2px solid rgba(244,132,95,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Pages -->
+  <div id="page-ledger" class="page"></div>
+  <div id="page-assets" class="page" style="display:none"></div>
+  <div id="page-stats"  class="page" style="display:none"></div>
+  <div id="page-import" class="page" style="display:none"></div>
+  <div id="page-settings" class="page" style="display:none"></div>
+
+  <!-- Bottom Nav -->
+  <nav class="nav">
+    <button class="nav-btn active" data-page="ledger" onclick="switchPage('ledger')">
+      <span class="ico">📒</span><span>账本</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" data-page="assets" onclick="switchPage('assets')">
+      <span class="ico">💰</span><span>资产</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" data-page="stats" onclick="switchPage('stats')">
+      <span class="ico">📊</span><span>统计</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" data-page="import" onclick="switchPage('import')">
+      <span class="ico">📷</span><span>导入</span><div class="nav-dot"></div>
+    </button>
+    <button class="nav-btn" data-page="settings" onclick="switchPage('settings')">
+      <span class="ico">⚙️</span><span>设置</span><div class="nav-dot"></div>
+    </button>
+  </nav>
+
+  <!-- Sheet overlay -->
+  <div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
+  <!-- Add transaction sheet -->
+  <div class="sheet" id="add-sheet"></div>
+  <!-- Calendar sheet -->
+  <div class="sheet" id="cal-sheet" style="z-index:100"></div>
+  <div class="sheet-overlay" id="cal-overlay" style="z-index:99" onclick="closeCal()"></div>
+</div>
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'forest_finance_v3';
+const EXPENSE_CATS = ['餐饮','购物','服饰','日用','交通','娱乐','医疗','住房','数码','运动','学习','社交','人情','其他'];
+const INCOME_CATS  = ['工资','奖金','副业','投资收益','报销','其他收入'];
+const CAT_EMOJI = {餐饮:'🍜',购物:'🛍️',服饰:'👕',日用:'🧴',交通:'🚌',娱乐:'🎮',医疗:'💊',住房:'🏠',数码:'💻',运动:'🏃',学习:'📚',社交:'👥',人情:'🎁',其他:'📌',工资:'💼',奖金:'🎉',副业:'💡',投资收益:'📈',报销:'🧾',其他收入:'💰'};
+const CAT_COLORS = ['#F4845F','#F7B731','#26de81','#4FC3F7','#7C83FD','#fd9644','#FC5C65','#45AAF2','#A29BFE','#55EFC4','#FDCB6E','#E17055','#74B9FF','#B2BEC3'];
+
+const DEFAULT_DATA = {
+  accounts: [
+    {id:'1',name:'农业银行',type:'储蓄卡',balance:61979.94,icon:'🏦'},
+    {id:'2',name:'招商银行',type:'储蓄卡',balance:2708.12,icon:'🏦'},
+    {id:'3',name:'微信零钱',type:'微信钱包',balance:14.68,icon:'💚'},
+  ],
+  transactions: [],
+  defaultAccountId: '1'
+};
+
+let DB = (() => { try { const r=localStorage.getItem(STORAGE_KEY); return r?JSON.parse(r):JSON.parse(JSON.stringify(DEFAULT_DATA)); } catch{ return JSON.parse(JSON.stringify(DEFAULT_DATA)); } })();
+const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+const today = () => new Date().toISOString().slice(0,10);
+const fmt = n => '¥' + Number(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate = d => { const [,m,day]=d.split('-'); return `${parseInt(m)}月${parseInt(day)}日`; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const getApiKey = () => localStorage.getItem('claude_api_key')||'';
+
+// ─── Page Routing ──────────────────────────────────────────────────────────────
+let currentPage = 'ledger';
+let statsCharts = {};
+
+function switchPage(p) {
+  document.querySelectorAll('.page').forEach(el => el.style.display='none');
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.toggle('active', el.dataset.page===p));
+  document.getElementById('page-'+p).style.display='block';
+  currentPage = p;
+  const renders = {ledger:renderLedger, assets:renderAssets, stats:renderStats, import:renderImport, settings:renderSettings};
+  renders[p]?.();
+}
+
+// ─── Sheet ─────────────────────────────────────────────────────────────────────
+function openSheet(id) {
+  document.getElementById('sheet-overlay').classList.add('show');
+  document.getElementById(id).classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeSheet() {
+  document.getElementById('sheet-overlay').classList.remove('show');
+  document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show'));
+  document.body.style.overflow='';
+}
+function openCal() {
+  document.getElementById('cal-overlay').classList.add('show');
+  document.getElementById('cal-sheet').classList.add('show');
+}
+function closeCal() {
+  document.getElementById('cal-overlay').classList.remove('show');
+  document.getElementById('cal-sheet').classList.remove('show');
+}
+
+// ─── Add Transaction Sheet ─────────────────────────────────────────────────────
+let addState = { type:'expense', amount:'', cat:'餐饮', note:'', date:today(), accountId:'', nlText:'', nlLoading:false, nlPreview:null };
+
+function openAddSheet(prefill={}) {
+  addState = { type:'expense', amount:'', cat:'餐饮', note:'', date:today(),
+    accountId: DB.defaultAccountId || DB.accounts[0]?.id || '',
+    nlText:'', nlLoading:false, nlPreview:null, ...prefill };
+  renderAddSheet();
+  openSheet('add-sheet');
+  // focus NL input
+  setTimeout(()=>{ const el=document.getElementById('nl-text'); if(el) el.focus(); },350);
+}
+
+function renderAddSheet() {
+  const s = addState;
+  const cats = s.type==='income' ? INCOME_CATS : EXPENSE_CATS;
+  const typeColor = s.type==='income'?'var(--green)':s.type==='expense'?'var(--red)':'var(--purple)';
+
+  let nlSection = '';
+  if (s.nlPreview) {
+    const p = s.nlPreview;
+    nlSection = `
+      <div class="preview-card">
+        <div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:10px">✨ AI 识别结果，确认后记账</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="font-size:26px">${CAT_EMOJI[p.cat]||'📌'}</span>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:15px">${p.cat}${p.note?' · '+p.note:''}</div>
+            <div class="sub-text" style="margin-top:2px">${p.date} · ${DB.accounts.find(a=>a.id===p.accountId)?.name||''}</div>
+          </div>
+          <div style="font-size:22px;font-weight:800;color:${p.type==='income'?'var(--green)':'var(--red)'}">
+            ${p.type==='income'?'+':'-'}${fmt(p.amount)}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" style="flex:1;padding:10px 0;border-radius:12px;font-size:14px" onclick="nlClear()">重新输入</button>
+          <button class="btn-primary" style="flex:2;padding:10px 0;border-radius:12px;font-size:14px" onclick="nlConfirm()">✓ 确认记账</button>
+        </div>
+      </div>`;
+  } else {
+    nlSection = `
+      <div style="background:var(--card);border-radius:16px;padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow)">
+        <div style="font-size:11px;color:var(--sub);font-weight:600;margin-bottom:8px">✨ 自然语言记账</div>
+        <div class="nl-bar">
+          <input id="nl-text" class="nl-input" placeholder="例：中午吃牛肉河粉花了20元" value="${s.nlText}"
+            oninput="addState.nlText=this.value"
+            onkeydown="if(event.key==='Enter')nlParse()">
+          <button class="nl-btn" ${s.nlLoading||!s.nlText.trim()?'disabled':''} onclick="nlParse()">
+            ${s.nlLoading?'<span class=spinner></span>':'记'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('add-sheet').innerHTML = `
+    <!-- Handle -->
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px"></div>
+
+    <!-- Type tabs -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div class="pill-tabs" style="flex:1;margin-right:12px">
+        ${['expense','income','transfer'].map(t=>`
+          <button class="pill-tab ${s.type===t?'active':''}" onclick="setAddType('${t}')"
+            style="${s.type===t?(t==='income'?'color:var(--green)':t==='expense'?'color:var(--red)':'color:var(--purple)'):''}"
+          >${{expense:'支出',income:'收入',transfer:'转账'}[t]}</button>`).join('')}
+      </div>
+      <button onclick="closeSheet()" style="width:32px;height:32px;border-radius:50%;border:none;background:var(--border);color:var(--sub);font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+
+    <!-- NL section -->
+    ${nlSection}
+
+    <!-- Amount display -->
+    <div style="background:var(--card);border-radius:18px;padding:16px 20px;margin-bottom:16px;box-shadow:var(--shadow)">
+      <div style="font-size:11px;color:var(--sub);font-weight:600;margin-bottom:4px">${{expense:'支出金额',income:'收入金额',transfer:'转账金额'}[s.type]}</div>
+      <div style="font-size:44px;font-weight:900;letter-spacing:-1px;color:${typeColor};line-height:1">¥${s.amount||'0'}</div>
+    </div>
+
+    <!-- Categories -->
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px">
+      ${cats.map(c=>`<button class="cat-pill ${s.cat===c?'active':''}" onclick="setAddCat('${c}')">${CAT_EMOJI[c]||''} ${c}</button>`).join('')}
+    </div>
+
+    <!-- Meta row -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+      <button onclick="openDatePicker()" style="padding:9px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--card);font-size:13px;color:var(--text);display:flex;align-items:center;gap:5px;white-space:nowrap;font-family:inherit">
+        📅 ${s.date.slice(5).replace('-','月')}日
+      </button>
+      <select class="fselect" style="flex:1;min-width:110px" onchange="addState.accountId=this.value">
+        ${DB.accounts.map(a=>`<option value="${a.id}" ${s.accountId===a.id?'selected':''}>${a.icon} ${a.name}</option>`).join('')}
+      </select>
+      <input class="finput" style="flex:2;min-width:110px" placeholder="备注（可选）" value="${s.note}"
+        oninput="addState.note=this.value">
+    </div>
+
+    <!-- Numpad -->
+    <div class="numpad" style="margin-bottom:14px">
+      ${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map(k=>`
+        <button class="numpad-btn ${k==='⌫'?'del':''}" onclick="numTap('${k}')">${k}</button>`).join('')}
+    </div>
+
+    <button class="btn-primary" style="margin-bottom:8px;opacity:${s.amount?1:0.5}" onclick="submitAdd()">完成记录</button>
+  `;
+}
+
+function setAddType(t) { addState.type=t; addState.cat=t==='income'?'工资':'餐饮'; renderAddSheet(); }
+function setAddCat(c)  { addState.cat=c; renderAddSheet(); }
+function numTap(k) {
+  let a = addState.amount;
+  if (k==='⌫') { addState.amount=a.slice(0,-1); }
+  else if (k==='.' && a.includes('.')) { return; }
+  else if (a.split('.')[1]?.length>=2) { return; }
+  else { addState.amount=(a+k).replace(/^0+(\d)/,'$1')||k; }
+  renderAddSheet();
+}
+function submitAdd() {
+  const s=addState; const a=parseFloat(s.amount);
+  if (!a||isNaN(a)) return;
+  const tx={id:uid(),type:s.type,amount:a,cat:s.cat,note:s.note,date:s.date,accountId:s.accountId};
+  addTransaction(tx); closeSheet(); renderLedger();
+}
+
+// NL
+async function nlParse() {
+  const key=getApiKey();
+  if (!key) { alert('请先在设置中填入 Claude API Key'); return; }
+  const text=addState.nlText.trim(); if(!text)return;
+  addState.nlLoading=true; renderAddSheet();
+  try {
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,messages:[{role:'user',content:
+        `记账助手，从输入提取记账信息，只返回JSON对象不要任何说明。
+支出分类：餐饮/购物/服饰/日用/交通/娱乐/医疗/住房/数码/运动/学习/社交/人情/其他
+收入分类：工资/奖金/副业/投资收益/报销/其他收入
+今天：${today()}
+返回：{"type":"expense或income","amount":数字,"cat":"分类","note":"备注","date":"YYYY-MM-DD"}
+输入：${text}`}]})
+    });
+    const data=await resp.json();
+    const raw=data.content?.map(c=>c.text||'').join('')||'';
+    const obj=JSON.parse(raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/)?.[0]||'{}');
+    if (!obj.amount) throw new Error('no amount');
+    addState.nlPreview={...obj,accountId:DB.defaultAccountId||DB.accounts[0]?.id};
+  } catch { alert('识别失败，请换个说法'); }
+  addState.nlLoading=false; renderAddSheet();
+}
+function nlClear()  { addState.nlPreview=null; addState.nlText=''; renderAddSheet(); }
+function nlConfirm() {
+  const p=addState.nlPreview;
+  const tx={id:uid(),...p};
+  addTransaction(tx); closeSheet(); renderLedger();
+}
+
+// ─── Date Picker ───────────────────────────────────────────────────────────────
+let calTarget = null; // 'add' | {callback}
+let calDate = today();
+
+function openDatePicker(target='add', current=null) {
+  calTarget=target; calDate=current||addState.date;
+  renderCal(); openCal();
+}
+function renderCal() {
+  const [y,m,d]=calDate.split('-').map(Number);
+  const daysInMonth=new Date(y,m,0).getDate();
+  const firstDay=new Date(y,m-1,1).getDay();
+  const days=[...Array(daysInMonth)].map((_,i)=>i+1);
+
+  document.getElementById('cal-sheet').innerHTML=`
+    <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <button onclick="calShift(-1)" style="background:none;border:none;font-size:24px;color:var(--accent);cursor:pointer">‹</button>
+      <span style="font-weight:800;font-size:16px">${y}年${m}月</span>
+      <button onclick="calShift(1)"  style="background:none;border:none;font-size:24px;color:var(--accent);cursor:pointer">›</button>
+    </div>
+    <div class="cal-grid" style="margin-bottom:10px">
+      ${['日','一','二','三','四','五','六'].map(w=>`<div style="text-align:center;font-size:11px;color:var(--sub);padding:3px 0">${w}</div>`).join('')}
+      ${Array(firstDay).fill('<div></div>').join('')}
+      ${days.map(day=>`<button class="cal-day ${day===d?'active':''}" onclick="calSelect(${day})">${day}</button>`).join('')}
+    </div>
+    <button onclick="calToday()" style="width:100%;padding:11px 0;border-radius:12px;border:none;background:var(--accent-bg);color:var(--accent);font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">今天</button>
+    <div style="height:16px"></div>
+  `;
+}
+function calShift(delta) {
+  const [y,m,d]=calDate.split('-').map(Number);
+  const nd=new Date(y,m-1+delta,1);
+  const nm=nd.getMonth()+1; const ny=nd.getFullYear();
+  const maxD=new Date(ny,nm,0).getDate();
+  calDate=`${ny}-${String(nm).padStart(2,'0')}-${String(Math.min(d,maxD)).padStart(2,'0')}`;
+  renderCal();
+}
+function calSelect(day) {
+  const [y,m]=calDate.split('-');
+  const nd=`${y}-${m}-${String(day).padStart(2,'0')}`;
+  if (calTarget==='add') { addState.date=nd; renderAddSheet(); }
+  else if (typeof calTarget==='function') { calTarget(nd); }
+  closeCal();
+}
+function calToday() { calSelect(parseInt(today().slice(8))); calDate=today(); }
+
+// ─── Transaction CRUD ──────────────────────────────────────────────────────────
+function addTransaction(tx) {
+  // adjust account balance
+  DB.accounts=DB.accounts.map(a=>{
+    if (a.id!==tx.accountId) return a;
+    const delta=tx.type==='income'?tx.amount:tx.type==='expense'?-tx.amount:0;
+    return {...a,balance:parseFloat((a.balance+delta).toFixed(2))};
+  });
+  DB.transactions.unshift(tx); save();
+}
+function deleteTransaction(id) {
+  const tx=DB.transactions.find(t=>t.id===id); if(!tx)return;
+  DB.accounts=DB.accounts.map(a=>{
+    if (a.id!==tx.accountId) return a;
+    const delta=tx.type==='income'?-tx.amount:tx.type==='expense'?tx.amount:0;
+    return {...a,balance:parseFloat((a.balance+delta).toFixed(2))};
+  });
+  DB.transactions=DB.transactions.filter(t=>t.id!==id); save();
+}
+
+// ─── Ledger Page ───────────────────────────────────────────────────────────────
+let ledgerMonth = today().slice(0,7);
+
+function renderLedger() {
+  const filtered=DB.transactions.filter(t=>t.date.startsWith(ledgerMonth)).sort((a,b)=>b.date.localeCompare(a.date));
+  const grouped=filtered.reduce((acc,t)=>{(acc[t.date]=acc[t.date]||[]).push(t);return acc;},{});
+  const totalIn=filtered.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const totalOut=filtered.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const [y,m]=ledgerMonth.split('-').map(Number);
+
+  const txHTML = Object.keys(grouped).length===0
+    ? `<div class="empty-state"><div style="font-size:44px;margin-bottom:12px">📒</div>本月暂无记录<br><span style="font-size:12px;margin-top:6px;display:block">点下方 + 开始记账</span></div>`
+    : Object.entries(grouped).sort((a,b)=>b[0].localeCompare(a[0])).map(([date,txs])=>{
+        const di=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+        const do_=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+        return `
+          <div style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+              <span style="font-size:13px;font-weight:700">${fmtDate(date)}</span>
+              <div style="font-size:12px;display:flex;gap:10px">
+                ${di>0?`<span style="color:var(--green)">+${fmt(di)}</span>`:''}
+                ${do_>0?`<span style="color:var(--red)">-${fmt(do_)}</span>`:''}
+              </div>
+            </div>
+            <div class="card">
+              ${txs.map((tx,i)=>{
+                const acct=DB.accounts.find(a=>a.id===tx.accountId);
+                return `<div class="tx-row">
+                  <div class="tx-icon">${CAT_EMOJI[tx.cat]||'📌'}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:14px;font-weight:600">${tx.cat}</div>
+                    <div class="sub-text" style="margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                      ${acct?acct.icon+' '+acct.name:''}${tx.note?' · '+tx.note:''}
+                    </div>
+                  </div>
+                  <div style="font-size:16px;font-weight:700;color:${tx.type==='income'?'var(--green)':'var(--text)'};margin-right:8px">
+                    ${tx.type==='income'?'+':'-'}${fmt(tx.amount)}
+                  </div>
+                  <button onclick="delTx('${tx.id}')" style="background:none;border:none;color:var(--border);font-size:16px;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center">✕</button>
+                </div>`;
+              }).join('<div class="divider"></div>')}
+            </div>
+          </div>`;
+      }).join('');
+
+  document.getElementById('page-ledger').innerHTML = `
+    <div style="padding:20px 20px 0">
+      <!-- Month nav -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <button onclick="ledgerShift(-1)" style="background:none;border:none;font-size:26px;color:var(--accent);cursor:pointer;line-height:1">‹</button>
+        <span style="font-size:18px;font-weight:800">${y}年${m}月</span>
+        <button onclick="ledgerShift(1)"  style="background:none;border:none;font-size:26px;color:var(--accent);cursor:pointer;line-height:1">›</button>
+      </div>
+      <!-- Summary -->
+      <div style="display:flex;gap:10px;margin-bottom:18px">
+        <div class="sum-card" style="background:var(--green-bg)">
+          <div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:3px">收入</div>
+          <div style="font-size:14px;font-weight:800;color:var(--green)">${fmt(totalIn)}</div>
+        </div>
+        <div class="sum-card" style="background:var(--red-bg)">
+          <div style="font-size:11px;color:var(--red);font-weight:700;margin-bottom:3px">支出</div>
+          <div style="font-size:14px;font-weight:800;color:var(--red)">${fmt(totalOut)}</div>
+        </div>
+        <div class="sum-card" style="background:var(--purple-bg)">
+          <div style="font-size:11px;color:var(--purple);font-weight:700;margin-bottom:3px">结余</div>
+          <div style="font-size:14px;font-weight:800;color:var(--purple)">${fmt(totalIn-totalOut)}</div>
+        </div>
+      </div>
+    </div>
+    <!-- Transactions -->
+    <div style="padding:0 20px">${txHTML}</div>
+    <!-- FAB -->
+    <button onclick="openAddSheet()" style="position:fixed;right:calc(50% - 200px);bottom:78px;width:54px;height:54px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:30px;cursor:pointer;box-shadow:0 4px 20px rgba(244,132,95,.5);display:flex;align-items:center;justify-content:center;z-index:30;font-weight:300">+</button>
+  `;
+}
+
+function ledgerShift(d) {
+  const [y,m]=ledgerMonth.split('-').map(Number);
+  const nd=new Date(y,m-1+d,1);
+  ledgerMonth=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`;
+  renderLedger();
+}
+function delTx(id) { deleteTransaction(id); renderLedger(); }
+
+// ─── Assets Page ───────────────────────────────────────────────────────────────
+let showAddAccount = false;
+let editingAccountId = null;
+const ACCOUNT_ICONS_LIST = ['🏦','💚','🔵','💳','💵','🟠','🟡','🔴','🏧','💎'];
+
+function renderAssets() {
+  const total=DB.accounts.reduce((s,a)=>s+a.balance,0);
+
+  const accountRows=DB.accounts.map((a,i)=>`
+    <div>
+      <div style="display:flex;align-items:center;padding:14px 18px">
+        <div style="width:42px;height:42px;border-radius:14px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:13px;flex-shrink:0">${a.icon}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center">
+            <span style="font-size:14px;font-weight:600">${a.name}</span>
+            ${DB.defaultAccountId===a.id?'<span class="tag-default">默认</span>':''}
+          </div>
+          <div class="sub-text" style="margin-top:2px">${a.type}</div>
+          ${DB.defaultAccountId!==a.id?`<button onclick="setDefault('${a.id}')" style="font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);padding:2px 8px;border-radius:8px;cursor:pointer;margin-top:4px;font-family:inherit">设为默认</button>`:''}
+        </div>
+        ${editingAccountId===a.id?`
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="edit-bal-${a.id}" type="number" value="${a.balance}" style="width:90px;padding:6px 9px;border:1.5px solid var(--accent);border-radius:10px;font-size:13px;outline:none;font-family:inherit">
+            <button onclick="saveEditBal('${a.id}')" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">✓</button>
+            <button onclick="cancelEdit()" style="background:var(--border);color:var(--sub);border:none;border-radius:10px;padding:6px 10px;cursor:pointer;font-size:13px;font-family:inherit">✕</button>
+          </div>
+        `:`
+          <div style="text-align:right;cursor:pointer" onclick="startEditBal('${a.id}')">
+            <div style="font-size:16px;font-weight:700">${fmt(a.balance)}</div>
+            <div style="font-size:10px;color:var(--accent);margin-top:2px">点击编辑</div>
+          </div>
+        `}
+        <button onclick="deleteAccount('${a.id}')" style="background:none;border:none;color:var(--border);font-size:15px;cursor:pointer;margin-left:10px">✕</button>
+      </div>
+      ${i<DB.accounts.length-1?'<div class="divider"></div>':''}
+    </div>`).join('');
+
+  const addAccountHTML = showAddAccount ? `
+    <div class="card card-pad" style="margin-top:12px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:12px">添加账户</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        ${ACCOUNT_ICONS_LIST.map(ic=>`<button onclick="setNewIcon('${ic}')" id="icon-btn-${ic}" style="width:42px;height:42px;border-radius:12px;border:2px solid var(--border);background:none;font-size:20px;cursor:pointer;transition:all .15s">${ic}</button>`).join('')}
+      </div>
+      <input id="new-acct-name" class="finput" placeholder="账户名称（如：农业银行）" style="margin-bottom:10px">
+      <input id="new-acct-bal" type="number" class="finput" placeholder="初始余额（元）" style="margin-bottom:10px">
+      <select id="new-acct-type" class="fselect" style="margin-bottom:14px">
+        ${['储蓄卡','信用卡','微信钱包','支付宝','余额宝','现金','投资账户','其他'].map(t=>`<option>${t}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:10px">
+        <button class="btn-ghost" style="flex:1" onclick="cancelAddAccount()">取消</button>
+        <button class="btn-primary" style="flex:2" onclick="saveNewAccount()">添加账户</button>
+      </div>
+    </div>` : `
+    <button onclick="showAddAccountForm()" style="width:100%;padding:15px 0;border-radius:18px;border:2px dashed var(--border);background:none;color:var(--sub);font-size:14px;cursor:pointer;font-weight:600;margin-top:12px;font-family:inherit">+ 添加账户</button>`;
+
+  document.getElementById('page-assets').innerHTML = `
+    <div style="padding:20px 20px 80px">
+      <div class="asset-hero">
+        <div style="font-size:12px;opacity:.85;margin-bottom:6px;font-weight:600;letter-spacing:.5px">净资产</div>
+        <div style="font-size:40px;font-weight:900;letter-spacing:-1px;margin-bottom:16px">${fmt(total)}</div>
+        <div style="display:flex;gap:32px;font-size:12px;opacity:.9">
+          <div><div style="opacity:.75">总资产</div><div style="font-weight:700;margin-top:2px">${fmt(total)}</div></div>
+          <div><div style="opacity:.75">总负债</div><div style="font-weight:700;margin-top:2px">¥0.00</div></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:4px">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--bg);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:700;font-size:15px">资金账户 (${DB.accounts.length})</span>
+          <span style="font-size:12px;color:var(--sub)">点余额可编辑</span>
+        </div>
+        ${accountRows}
+      </div>
+      ${addAccountHTML}
+    </div>`;
+
+  // highlight selected icon
+  if (showAddAccount) {
+    setTimeout(()=>{
+      const icon = window._newAccountIcon||'🏦';
+      const btn=document.getElementById('icon-btn-'+icon);
+      if(btn){btn.style.borderColor='var(--accent)';btn.style.background='var(--accent-bg)';}
+    },10);
+  }
+}
+
+window._newAccountIcon='🏦';
+function setNewIcon(ic) {
+  window._newAccountIcon=ic;
+  ACCOUNT_ICONS_LIST.forEach(i=>{
+    const b=document.getElementById('icon-btn-'+i);
+    if(b){b.style.borderColor=i===ic?'var(--accent)':'var(--border)';b.style.background=i===ic?'var(--accent-bg)':'none';}
+  });
+}
+function setDefault(id)       { DB.defaultAccountId=id; save(); renderAssets(); }
+function startEditBal(id)     { editingAccountId=id; renderAssets(); setTimeout(()=>document.getElementById('edit-bal-'+id)?.focus(),50); }
+function cancelEdit()         { editingAccountId=null; renderAssets(); }
+function saveEditBal(id)      { const v=parseFloat(document.getElementById('edit-bal-'+id)?.value); if(!isNaN(v)){DB.accounts=DB.accounts.map(a=>a.id===id?{...a,balance:v}:a);save();} editingAccountId=null; renderAssets(); }
+function deleteAccount(id)    { DB.accounts=DB.accounts.filter(a=>a.id!==id); save(); renderAssets(); }
+function showAddAccountForm()  { showAddAccount=true; renderAssets(); }
+function cancelAddAccount()    { showAddAccount=false; renderAssets(); }
+function saveNewAccount() {
+  const name=document.getElementById('new-acct-name')?.value?.trim();
+  const bal=parseFloat(document.getElementById('new-acct-bal')?.value)||0;
+  const type=document.getElementById('new-acct-type')?.value||'储蓄卡';
+  if(!name)return;
+  DB.accounts.push({id:uid(),name,type,balance:bal,icon:window._newAccountIcon||'🏦'});
+  save(); showAddAccount=false; window._newAccountIcon='🏦'; renderAssets();
+}
+
+// ─── Stats Page ────────────────────────────────────────────────────────────────
+let statsMonth = today().slice(0,7);
+let statsView  = 'expense';
+
+function renderStats() {
+  // destroy old charts
+  Object.values(statsCharts).forEach(c=>c.destroy());
+  statsCharts={};
+
+  const [y,m]=statsMonth.split('-').map(Number);
+  const filtered=DB.transactions.filter(t=>t.date.startsWith(statsMonth)&&t.type===statsView);
+  const catMap=filtered.reduce((acc,t)=>{acc[t.cat]=(acc[t.cat]||0)+t.amount;return acc;},{});
+  const catData=Object.entries(catMap).map(([n,v])=>({name:n,value:parseFloat(v.toFixed(2))})).sort((a,b)=>b.value-a.value);
+  const total=catData.reduce((s,d)=>s+d.value,0);
+
+  const trendData=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const inc=DB.transactions.filter(t=>t.date.startsWith(mk)&&t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp=DB.transactions.filter(t=>t.date.startsWith(mk)&&t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    trendData.push({month:mk.slice(5)+'月',income:parseFloat(inc.toFixed(2)),expense:parseFloat(exp.toFixed(2))});
+  }
+
+  const catLegend = catData.length===0 ? '<div style="text-align:center;color:var(--sub);padding:32px 0;font-size:13px">本月暂无数据</div>' :
+    catData.map((d,i)=>`
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:8px;height:8px;border-radius:3px;background:${CAT_COLORS[i%CAT_COLORS.length]};flex-shrink:0"></div>
+        <span style="font-size:13px">${CAT_EMOJI[d.name]||''} ${d.name}</span>
+        <div style="flex:1;height:4px;border-radius:4px;background:var(--bg);overflow:hidden">
+          <div style="height:100%;border-radius:4px;width:${total>0?(d.value/total*100).toFixed(1):0}%;background:${CAT_COLORS[i%CAT_COLORS.length]}"></div>
+        </div>
+        <span style="font-size:11px;color:var(--sub);min-width:28px;text-align:right">${total>0?(d.value/total*100).toFixed(0):0}%</span>
+        <span style="font-size:13px;font-weight:700;min-width:68px;text-align:right">${fmt(d.value)}</span>
+      </div>`).join('');
+
+  document.getElementById('page-stats').innerHTML=`
+    <div style="padding:20px 20px 80px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <button onclick="statsShift(-1)" style="background:none;border:none;font-size:26px;color:var(--accent);cursor:pointer;line-height:1">‹</button>
+        <span style="font-size:18px;font-weight:800">${y}年${m}月统计</span>
+        <button onclick="statsShift(1)"  style="background:none;border:none;font-size:26px;color:var(--accent);cursor:pointer;line-height:1">›</button>
+      </div>
+      <div class="pill-tabs" style="margin-bottom:16px">
+        <button class="pill-tab ${statsView==='expense'?'active':''}" onclick="setStatsView('expense')" style="${statsView==='expense'?'color:var(--red)':''}">支出</button>
+        <button class="pill-tab ${statsView==='income'?'active':''}"  onclick="setStatsView('income')"  style="${statsView==='income'?'color:var(--green)':''}">收入</button>
+      </div>
+      <!-- Pie -->
+      <div class="card card-pad" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-weight:700;font-size:14px">${statsView==='expense'?'支出':'收入'}分类</span>
+          <span style="font-size:13px;color:var(--sub)">${fmt(total)}</span>
+        </div>
+        ${catData.length>0?`<div class="chart-wrap" style="height:200px"><canvas id="pie-chart"></canvas></div>`:''}
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:${catData.length?12:0}px">${catLegend}</div>
+      </div>
+      <!-- Trend -->
+      <div class="card card-pad">
+        <div style="font-weight:700;font-size:14px;margin-bottom:14px">近6月收支趋势</div>
+        <div class="chart-wrap" style="height:180px"><canvas id="bar-chart"></canvas></div>
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:10px">
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--green)"></div><span style="font-size:12px;color:var(--sub)">收入</span></div>
+          <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--accent)"></div><span style="font-size:12px;color:var(--sub)">支出</span></div>
+        </div>
+      </div>
+    </div>`;
+
+  // Draw charts
+  if (catData.length>0) {
+    const ctx=document.getElementById('pie-chart')?.getContext('2d');
+    if(ctx) statsCharts.pie=new Chart(ctx,{type:'doughnut',data:{labels:catData.map(d=>d.name),datasets:[{data:catData.map(d=>d.value),backgroundColor:CAT_COLORS.slice(0,catData.length),borderWidth:2,borderColor:'#fff',hoverOffset:4}]},options:{cutout:'65%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.parsed)}`}}},animation:{duration:400}}});
+  }
+  const bctx=document.getElementById('bar-chart')?.getContext('2d');
+  if(bctx) statsCharts.bar=new Chart(bctx,{type:'bar',data:{labels:trendData.map(d=>d.month),datasets:[{label:'收入',data:trendData.map(d=>d.income),backgroundColor:'#3CB879',borderRadius:5},{label:'支出',data:trendData.map(d=>d.expense),backgroundColor:'#F4845F',borderRadius:5}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:10},color:'#9E9890'}},y:{grid:{color:'#F0EDE8'},ticks:{font:{size:9},color:'#9E9890',callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}}},animation:{duration:400}}});
+}
+function statsShift(d) { const [y,m]=statsMonth.split('-').map(Number); const nd=new Date(y,m-1+d,1); statsMonth=`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`; renderStats(); }
+function setStatsView(v) { statsView=v; renderStats(); }
+
+// ─── Import Page ───────────────────────────────────────────────────────────────
+let importResult=null, importSelected=[], importEditing=null;
+
+function renderImport() {
+  let resultHTML='';
+  if (importResult&&importResult.length>0) {
+    const batchAcctOpts=DB.accounts.map(a=>`<option value="${a.id}">${a.icon} ${a.name}</option>`).join('');
+    resultHTML=`
+      <div class="card card-pad" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-weight:700;font-size:14px">识别到 ${importResult.length} 条</span>
+          <button onclick="importToggleAll()" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+            ${importSelected.length===importResult.length?'取消全选':'全选'}
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:12px;color:var(--sub);flex-shrink:0">批量账户：</span>
+          <select id="batch-acct" class="fselect" style="flex:1">${batchAcctOpts}</select>
+          <button onclick="importBatchAcct()" style="padding:7px 14px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit">应用到所选</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        ${importResult.map((tx,i)=>{
+          const sel=importSelected.includes(tx.id);
+          const isEdit=importEditing===tx.id;
+          const acct=DB.accounts.find(a=>a.id===tx.accountId);
+          const allCatOpts=[...EXPENSE_CATS,...INCOME_CATS].map(c=>`<option value="${c}" ${tx.cat===c?'selected':''}>${c}</option>`).join('');
+          const acctOpts=DB.accounts.map(a=>`<option value="${a.id}" ${tx.accountId===a.id?'selected':''}>${a.name}</option>`).join('');
+          return `
+            <div style="border-bottom:${i<importResult.length-1?'1px solid var(--bg)':'none'}">
+              <div style="display:flex;align-items:center;padding:12px 14px;background:${sel?'var(--accent-bg)':'var(--card)'};cursor:pointer" onclick="importToggle('${tx.id}')">
+                <div class="chk ${sel?'checked':''}" style="margin-right:10px">
+                  ${sel?'<span style="color:#fff;font-size:12px;font-weight:700">✓</span>':''}
+                </div>
+                <span style="font-size:18px;margin-right:8px">${CAT_EMOJI[tx.cat]||'📌'}</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600">${tx.cat}${tx.note?' · '+tx.note:''}</div>
+                  <div class="sub-text">${tx.date} · ${acct?.name||'未选'}</div>
+                </div>
+                <div style="font-size:14px;font-weight:700;color:${tx.type==='income'?'var(--green)':'var(--red)'};margin-right:8px">
+                  ${tx.type==='income'?'+':'-'}${fmt(tx.amount)}
+                </div>
+                <button onclick="event.stopPropagation();importEdit('${tx.id}')" style="background:${isEdit?'var(--accent)':'var(--bg)'};border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:11px;color:${isEdit?'#fff':'var(--sub)'};flex-shrink:0;font-family:inherit">
+                  ${isEdit?'收起':'编辑'}
+                </button>
+              </div>
+              ${isEdit?`
+                <div class="edit-panel">
+                  <div class="edit-grid">
+                    <div><div class="edit-label">类型</div>
+                      <select class="fselect" onchange="importUpdateTx('${tx.id}','type',this.value)">
+                        <option value="expense" ${tx.type==='expense'?'selected':''}>支出</option>
+                        <option value="income"  ${tx.type==='income'?'selected':''}>收入</option>
+                      </select></div>
+                    <div><div class="edit-label">金额</div>
+                      <input type="number" class="finput" value="${tx.amount}" onchange="importUpdateTx('${tx.id}','amount',parseFloat(this.value)||0)"></div>
+                    <div><div class="edit-label">分类</div>
+                      <select class="fselect" onchange="importUpdateTx('${tx.id}','cat',this.value)">${allCatOpts}</select></div>
+                    <div><div class="edit-label">账户</div>
+                      <select class="fselect" onchange="importUpdateTx('${tx.id}','accountId',this.value)">${acctOpts}</select></div>
+                    <div><div class="edit-label">日期</div>
+                      <input type="date" class="finput" value="${tx.date}" onchange="importUpdateTx('${tx.id}','date',this.value)"></div>
+                    <div><div class="edit-label">备注</div>
+                      <input class="finput" value="${tx.note||''}" oninput="importUpdateTx('${tx.id}','note',this.value)"></div>
+                  </div>
+                </div>`:''}
+            </div>`;
+        }).join('')}
+      </div>
+      <button onclick="importConfirm()" ${importSelected.length?'':'disabled'}
+        style="width:100%;padding:15px 0;border-radius:16px;border:none;background:${importSelected.length?'var(--accent)':'var(--border)'};color:${importSelected.length?'#fff':'var(--sub)'};font-size:15px;font-weight:800;cursor:${importSelected.length?'pointer':'default'};font-family:inherit;margin-bottom:12px">
+        导入选中 ${importSelected.length} 条
+      </button>`;
+  }
+
+  document.getElementById('page-import').innerHTML=`
+    <div style="padding:20px 20px 80px">
+      <div style="font-weight:800;font-size:18px;margin-bottom:4px">截图导入</div>
+      <div style="font-size:13px;color:var(--sub);margin-bottom:18px">上传微信/支付宝账单截图，AI自动识别</div>
+      <div onclick="document.getElementById('img-input').click()"
+        style="border:2px dashed rgba(244,132,95,.4);border-radius:20px;padding:32px 20px;text-align:center;background:var(--accent-bg);cursor:pointer;margin-bottom:16px">
+        <div style="font-size:44px;margin-bottom:8px">📷</div>
+        <div style="font-size:15px;font-weight:700;color:var(--accent)">点击上传账单截图</div>
+        <div style="font-size:12px;color:var(--sub);margin-top:4px">支持微信 · 支付宝 · 银行流水</div>
+      </div>
+      <input id="img-input" type="file" accept="image/*" style="display:none" onchange="importFile(this)">
+      <div id="import-status"></div>
+      ${resultHTML}
+      ${!importResult?`
+        <div class="card card-pad">
+          <div style="font-weight:700;font-size:13px;margin-bottom:10px">💡 使用建议</div>
+          ${['截图尽量清晰，包含金额和日期','支付宝「账单明细」逐页截图效果最佳','识别后可逐条点击「编辑」修改','批量选中后可一键更改账户','确认无误再点导入，余额自动联动'].map(t=>`<div style="font-size:12px;color:var(--sub);margin-bottom:5px">• ${t}</div>`).join('')}
+        </div>`:''}
+    </div>`;
+}
+
+async function importFile(input) {
+  const key=getApiKey();
+  if (!key) { alert('请先在设置中填入 Claude API Key'); return; }
+  const file=input.files[0]; if(!file)return;
+  document.getElementById('import-status').innerHTML=`
+    <div class="card card-pad" style="text-align:center;margin-bottom:14px">
+      <div style="font-size:32px;margin-bottom:10px">🤖</div>
+      <div style="font-size:14px;color:var(--accent);font-weight:700">AI 正在识别账单…</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:4px">通常需要 5–10 秒</div>
+    </div>`;
+  try {
+    const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1500,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:base64}},
+        {type:'text',text:`分析这张账单截图，提取所有交易记录，只返回JSON数组不要任何说明。
+每条：{"type":"expense或income","amount":数字,"cat":"分类","note":"备注","date":"YYYY-MM-DD"}
+支出分类：餐饮/购物/服饰/日用/交通/娱乐/医疗/住房/数码/运动/学习/社交/人情/其他
+收入分类：工资/奖金/副业/投资收益/报销/其他收入
+今天：${today()}`}
+      ]}]})
+    });
+    const data=await resp.json();
+    const text=data.content?.map(c=>c.text||'').join('')||'';
+    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim().match(/\[[\s\S]*\]/)?.[0]||'[]');
+    if(!parsed.length){document.getElementById('import-status').innerHTML=`<div style="background:var(--red-bg);border-radius:14px;padding:13px 16px;color:var(--red);font-size:13px;margin-bottom:12px">⚠️ 未识别到账单，请换清晰截图</div>`;return;}
+    importResult=parsed.map(t=>({...t,id:uid(),accountId:DB.defaultAccountId||DB.accounts[0]?.id}));
+    importSelected=importResult.map(t=>t.id);
+    importEditing=null;
+    document.getElementById('import-status').innerHTML='';
+    renderImport();
+  } catch(e){
+    document.getElementById('import-status').innerHTML=`<div style="background:var(--red-bg);border-radius:14px;padding:13px 16px;color:var(--red);font-size:13px;margin-bottom:12px">⚠️ 识别失败：${e.message}</div>`;
+  }
+  input.value='';
+}
+function importToggle(id)    { importSelected=importSelected.includes(id)?importSelected.filter(x=>x!==id):[...importSelected,id]; renderImport(); }
+function importToggleAll()   { importSelected=importSelected.length===importResult.length?[]:importResult.map(t=>t.id); renderImport(); }
+function importEdit(id)      { importEditing=importEditing===id?null:id; renderImport(); }
+function importUpdateTx(id,field,value){ importResult=importResult.map(t=>t.id===id?{...t,[field]:value}:t); renderImport(); }
+function importBatchAcct()   { const v=document.getElementById('batch-acct')?.value; if(v)importResult=importResult.map(t=>importSelected.includes(t.id)?{...t,accountId:v}:t); renderImport(); }
+function importConfirm() {
+  const toAdd=importResult.filter(t=>importSelected.includes(t.id));
+  toAdd.forEach(tx=>addTransaction(tx));
+  importResult=null; importSelected=[]; importEditing=null;
+  renderImport();
+}
+
+// ─── Settings Page ─────────────────────────────────────────────────────────────
+function renderSettings() {
+  const key=getApiKey();
+  document.getElementById('page-settings').innerHTML=`
+    <div style="padding:20px 20px 80px">
+      <div style="font-weight:800;font-size:18px;margin-bottom:18px">设置</div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--bg)">
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px">🔑 Claude API Key</div>
+          <div style="font-size:12px;color:var(--sub);margin-bottom:10px">用于自然语言记账和截图识别功能</div>
+          <input id="api-key-input" class="finput" type="password" placeholder="sk-ant-api03-..." value="${key}"
+            style="margin-bottom:10px">
+          <div style="display:flex;gap:8px">
+            <button class="btn-primary" style="flex:1;padding:11px 0;border-radius:12px;font-size:14px" onclick="saveApiKey()">保存</button>
+            ${key?`<button style="flex:1;padding:11px 0;border-radius:12px;border:1.5px solid var(--border);background:none;color:var(--red);font-size:14px;cursor:pointer;font-family:inherit" onclick="clearApiKey()">清除</button>`:''}
+          </div>
+          ${key?`<div style="font-size:12px;color:var(--green);margin-top:8px">✓ 已配置 API Key</div>`:''}
+        </div>
+        <div style="padding:14px 18px">
+          <div style="font-size:12px;color:var(--sub);line-height:1.6">
+            API Key 仅存储在本机 localStorage，不会上传到任何服务器。<br>
+            在 <a href="https://console.anthropic.com/settings/keys" style="color:var(--accent)">console.anthropic.com</a> 获取。
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--bg)">
+          <div style="font-weight:700;font-size:14px;margin-bottom:2px">📱 添加到主屏幕</div>
+        </div>
+        <div style="padding:14px 18px">
+          <div style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:10px">
+            在 Safari 中打开本页面，点击底部 <strong>分享按钮</strong>（□↑），然后选择<strong>「添加到主屏幕」</strong>，即可像 App 一样使用。
+          </div>
+          <div style="font-size:12px;color:var(--sub)">添加后全屏打开，无地址栏，体验更佳。</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="padding:14px 18px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:12px">📤 数据导出</div>
+          <button onclick="exportData()" style="width:100%;padding:12px 0;border-radius:14px;border:1.5px solid var(--border);background:none;color:var(--text);font-size:14px;cursor:pointer;font-weight:600;font-family:inherit;margin-bottom:8px">导出 JSON 备份</button>
+          <div style="font-size:12px;color:var(--sub)">将所有账单和账户数据导出为 JSON 文件备份。</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="padding:14px 18px">
+          <div style="font-weight:700;font-size:14px;color:var(--red);margin-bottom:12px">⚠️ 危险操作</div>
+          <button onclick="clearAllData()" style="width:100%;padding:12px 0;border-radius:14px;border:1.5px solid var(--red);background:none;color:var(--red);font-size:14px;cursor:pointer;font-weight:600;font-family:inherit">清空所有数据</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveApiKey() {
+  const v=document.getElementById('api-key-input')?.value?.trim();
+  if(v){localStorage.setItem('claude_api_key',v);renderSettings();alert('API Key 已保存');}
+}
+function clearApiKey() { localStorage.removeItem('claude_api_key'); renderSettings(); }
+function exportData() {
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`记账本备份_${today()}.json`; a.click();
+}
+function clearAllData() {
+  if(confirm('确认清空所有记账数据？此操作不可恢复。')){
+    DB=JSON.parse(JSON.stringify(DEFAULT_DATA)); save();
+    importResult=null; importSelected=[];
+    switchPage('ledger');
+  }
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────────
+renderLedger();
+</script>
+</body>
+</html>
